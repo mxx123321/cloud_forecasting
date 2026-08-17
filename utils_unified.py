@@ -7,7 +7,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-# --- 配置字典 (保持不变) ---
+# --- Configuration dictionaries (unchanged) ---
 expansion_ratios_L = {
     '0': [4, 4, 4, 4, 4],
     '1': [4, 4, 4, 4, 4],
@@ -22,7 +22,7 @@ expansion_ratios_L_reverse = {
     '0': [4, 4, 4, 3, 3, 3, 3, 4, 4, 4],
 }
 
-# --- Loss 类 ---
+# --- Loss function ---
 class MaskedMSELoss(nn.Module):
     def __init__(self, ignore_index=-1):
         super(MaskedMSELoss, self).__init__()
@@ -35,32 +35,32 @@ class MaskedMSELoss(nn.Module):
         masked_loss = (loss * mask).sum() / (mask.sum() + 1e-8)
         return masked_loss
 
-# --- 辅助函数：获取城市特定的参数 ---
+# --- Helper function: get city-specific parameters ---
 def get_city_params(city):
     """
-    根据城市名返回特定的参数，例如中心坐标
+    Return city-specific parameters, such as the ROI center coordinates.
     """
     params = {}
     if city == 'Nanjing':
-        # 南京的 ROI 中心
+        # ROI center for Nanjing
         params['center_row'] = 512
         params['center_col'] = 512
-        params['day_night_center_row'] = 512 # 南京 day_night 也是 339
+        params['day_night_center_row'] = 512 # Day/night evaluation uses the same center row for Nanjing.
     elif city == 'Changchun':
-        # 长春的 ROI 中心
+        # ROI center for Changchun
         params['center_row'] = 339
         params['center_col'] = 512
-        # 注意：在您的原始代码中，长春在 visualize_predictions_day_night 里使用的是 512
+        # Note: the original code used a different row setting for Changchun in visualize_predictions_day_night.
         params['day_night_center_row'] = 339 
     else:
-        # 默认值
+        # Default values
         params['center_row'] = 339
         params['center_col'] = 512
         params['day_night_center_row'] = 339
         
     return params
 
-# --- 训练函数 ---
+# --- Training function ---
 def train(model, train_loader, val_loader, criterion, optimizer, num_epochs=20, save_path='./model.pth'): 
     device = next(model.parameters()).device
     save_dir = os.path.dirname(save_path)
@@ -109,7 +109,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, num_epochs=20, 
         if epoch_val_loss < best_val_loss:
             best_val_loss = epoch_val_loss
             torch.save(model.state_dict(), save_path)
-            print(f"检测到更好的模型，已保存至: {save_path}")
+            print(f"Improved validation checkpoint detected and saved to: {save_path}")
 
         epoch_time = time.time() - start_time
         print(f'Epoch [{epoch+1}/{num_epochs}] took {epoch_time:.2f} seconds.')
@@ -127,7 +127,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, num_epochs=20, 
             plt.savefig(f'loss_curve_epoch.png')
             plt.close()
 
-# --- 评估指标辅助函数 ---
+# --- Evaluation metric helper ---
 def binary_metrics_masked(outputs, labels, mask, positive_label=0):
     outputs_pos = (outputs == positive_label) & mask
     labels_pos = (labels == positive_label) & mask
@@ -157,19 +157,19 @@ def binary_metrics_masked(outputs, labels, mask, positive_label=0):
 def calculate_accu(label, outputs, city='Nanjing'):
     device = label.device
     
-    # --- 1. 获取动态参数 ---
+    # --- 1. Get city-specific parameters ---
     city_params = get_city_params(city)
     center_row = city_params['center_row']
     center_col = city_params['center_col']
     radius = 32       
 
-    # --- 2. 数据预处理 ---
+    # --- 2. Preprocess predictions and labels ---
     outputs = torch.clamp(torch.round(outputs), 0, 3).to(torch.int)
     label = label.to(torch.int)
     
     H, W = label.shape[-2], label.shape[-1]
 
-    # --- 3. 创建 ROI 掩码 ---
+    # --- 3. Create the ROI mask ---
     roi_mask = torch.zeros_like(label, dtype=torch.bool)
     r_start = max(0, center_row - radius)
     r_end = min(H, center_row + radius)
@@ -177,23 +177,23 @@ def calculate_accu(label, outputs, city='Nanjing'):
     c_end = min(W, center_col + radius)
     roi_mask[..., r_start:r_end, c_start:c_end] = True
 
-    # --- 4. 结合有效像素掩码 ---
+    # --- 4. Combine with the valid-pixel mask ---
     valid_mask = (label != -1) & roi_mask
     
     if valid_mask.sum() == 0: 
         return 0, 0, {'accuracy': 0, 'precision': 0, 'recall': 0, 'f1': 0, 'iou': 0, 'kappa': 0}
 
-    # --- 5. 计算原始 4 分类的准确率 ---
+    # --- 5. Compute the original four-class accuracy ---
     correct_mask_org = (outputs == label) & valid_mask
     accuracy2 = correct_mask_org.float().sum() / valid_mask.float().sum()
     
-    # --- 6. 二分类逻辑处理 ---
+    # --- 6. Convert the four classes into the binary evaluation setting ---
     outputs_process = torch.where(outputs == 1, torch.tensor(0, device=device),
                         torch.where(outputs == 2, torch.tensor(3, device=device), outputs))
     label_process = torch.where(label == 1, torch.tensor(0, device=device),
                         torch.where(label == 2, torch.tensor(3, device=device), label))
     
-    # --- 7. 调用 metrics ---
+    # --- 7. Compute binary evaluation metrics ---
     result = binary_metrics_masked(outputs_process, label_process, valid_mask, positive_label=3)
     
     correct_mask = (outputs_process == label_process) & valid_mask
@@ -201,17 +201,17 @@ def calculate_accu(label, outputs, city='Nanjing'):
     
     return accuracy.item(), accuracy2.item(), result
 
-# --- 可视化与预测函数 (Day/Night 版) ---
+# --- Prediction and visualization function (day/night evaluation) ---
 def visualize_predictions_day_night(model, test_loader, output_folder, model_name, seq_len, pred_len, city, do_vis, device,test_months_str=""):
     
-    # --- 获取动态参数 ---
+    # --- Get city-specific parameters ---
     city_params = get_city_params(city)
-    # 注意：这里使用的是 day_night 专用的 row 坐标
+    # Use the day/night-specific row coordinate here.
     center_row = city_params['day_night_center_row'] 
     center_col = city_params['center_col']
     radius = 32
 
-    # 1. 初始化统计容器
+    # 1. Initialize metric containers.
     stats = {
         "Daytime": {"acc1": [], "acc2": [], "accuracy": [], "prec": [], "recall": [], "f1": [], "iou": []},
         "Nighttime": {"acc1": [], "acc2": [], "accuracy": [], "prec": [], "recall": [], "f1": [], "iou": []},
@@ -231,7 +231,7 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
             batch_size = inputs.size(0)
             
             for b in range(batch_size):
-                # A. 提取文件路径
+                # A. Extract the sample filename/path.
                 if isinstance(files_name, (list, tuple)) and len(files_name) > 0:
                     sample_path = files_name[0][b] if isinstance(files_name[0], (list, tuple)) else files_name[b]
                 else:
@@ -240,7 +240,7 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
                 if torch.is_tensor(sample_path):
                     sample_path = str(sample_path[0].item())
 
-                # B. 解析时间
+                # B. Parse the observation time.
                 file_name = os.path.basename(sample_path)
                 file_name_pure = os.path.splitext(file_name)[0] 
                 
@@ -257,14 +257,14 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
                 
                 period = "Daytime" if 8 <= hour < 20 else "Nighttime"
 
-                # C. 计算该样本指标 - 传入 city 参数
+                # C. Compute metrics for this sample using the city-specific ROI.
                 # acc_t, acc_t2, result = calculate_accu(label[b:b+1], outputs[b:b+1], city=city)
-                ## C. 计算该样本指标 - 只取第 1 个通道 (Index 0)
-                # label[b:b+1] 的维度是 (1, C, H, W)
-                # 加上 , 0:1 后，维度变为 (1, 1, H, W)，即只保留第一个通道的数据
+                ## C. Compute metrics using only the first channel (index 0).
+                # label[b:b+1] has shape (1, C, H, W).
+                # Slicing with 0:1 changes the shape to (1, 1, H, W), retaining only the first channel.
                 acc_t, acc_t2, result = calculate_accu(label[b:b+1, 0:1], outputs[b:b+1, 0:1], city=city)
                 
-                # D. 归档
+                # D. Store the metrics.
                 for target in [period, "Total"]:
                     stats[target]["acc1"].append(acc_t)
                     stats[target]["acc2"].append(acc_t2)
@@ -274,7 +274,7 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
                     stats[target]["f1"].append(result['f1'])
                     stats[target]["iou"].append(result['iou'])
 
-            # E. 可视化保存逻辑
+            # E. Save visualization results.
             if do_vis:
                 for b in range(outputs.size(0)):  
                     for c in range(outputs.size(1)):
@@ -307,7 +307,7 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
                         pred_rgb = draw_roi_box(pred_rgb, center_row, center_col, radius)
                         label_rgb = draw_roi_box(label_rgb, center_row, center_col, radius)
 
-                        # 获取文件名
+                        # Extract the output filename.
                         if isinstance(files_name, (list, tuple)) and isinstance(files_name[c], (list, tuple)):
                             fname = os.path.basename(str(files_name[c][b]))
                         else:
@@ -334,15 +334,15 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
                             fname = os.path.basename(raw_name)
                         ##############################################
                         # ==========================================
-                        # -------- 请在这里插入新增的保存代码 --------
+                        # -------- Save prediction and ground-truth images --------
                         # ==========================================
-                        # 1. 定义并创建 pred 和 gt 文件夹
+                        # 1. Define and create the prediction and ground-truth folders.
                         pred_folder = os.path.join(output_folder, 'pred')
                         gt_folder = os.path.join(output_folder, 'gt')
                         os.makedirs(pred_folder, exist_ok=True)
                         os.makedirs(gt_folder, exist_ok=True)
 
-                        # 2. 检查是否已经存在，避免重复保存（可选，提高效率）
+                        # 2. Skip files that already exist to avoid redundant I/O.
                         pred_path = os.path.join(pred_folder, f'{fname}.png')
                         gt_path = os.path.join(gt_folder, f'{fname}.png')
                         if not os.path.exists(pred_path):
@@ -358,7 +358,7 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
                             fig.savefig(concat_path, bbox_inches='tight', pad_inches=0)
                             plt.close(fig)
 
-    # 2. 计算平均值并保存
+    # 2. Compute mean metrics and save the results.
     final_return = (0, 0, 0, 0, 0, 0, 0)
     for p_name in ["Daytime", "Nighttime", "Total"]:
         d = stats[p_name]
@@ -380,9 +380,9 @@ def visualize_predictions_day_night(model, test_loader, output_folder, model_nam
 
     return final_return
 
-# --- CSV 保存函数 ---
+# --- CSV saving function ---
 def save_to_csv(model_name, mean_acc, mean_acc2, accuracy_avg, prec_avg, recall_avg, f1_avg, iou_avg, seq_len, pred_len, city, csv_file=None):
-    # 如果没有指定 csv_file，根据 city 自动决定
+    # If csv_file is not specified, select the default path according to the city.
     if csv_file is None:
         if city == 'Nanjing':
             csv_file = './csv_results/Nanjing_results_1024.csv'
@@ -391,7 +391,7 @@ def save_to_csv(model_name, mean_acc, mean_acc2, accuracy_avg, prec_avg, recall_
         else:
             csv_file = f'./csv_results/{city}_results_1024.csv'
             
-    # 确保目录存在
+    # Ensure that the output directory exists.
     os.makedirs(os.path.dirname(csv_file), exist_ok=True)
 
     file_exists = os.path.exists(csv_file)
