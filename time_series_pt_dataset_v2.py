@@ -343,39 +343,4 @@ class CloudMaskSequenceDataset_Fixed_Month(Dataset):
         
         return input_data, output_data, name_list
 #cities = ['Chengdu','Mohe','Huhehaote','Lanzhou','Kunming','Nanjing','Shanghai','Beijing','Changchun','Kuerle','Shenzhen', 'Xian']
-# # cities = ['Chengdu']
-# cities = ['Dongjing']
-# url = '/root/autodl-tmp/cropped_images_128_zip/Dongjing/Dongjing/'
-# # for name in cities: 
-# #     # Example usagedef __init__(self, directory, num_input=5, num_output=5, time_difference=15, train_ratio=0.7, valid_ratio=0.15, test_ratio=0.15,dataset_type='train'):
 
-# directory = "/root/autodl-tmp/cropped_images_128_zip/Dongjing/Dongjing/"
-# dataset_train = CloudMaskSequenceDataset(directory, num_input=2, num_output=2,train_ratio=0.8, valid_ratio=0.1, test_ratio=0.1,\
-#     dataset_type='train',dataset_total=0.1)
-# dataset_val = CloudMaskSequenceDataset(directory, num_input=2, num_output=2,train_ratio=0.8, valid_ratio=0.1, test_ratio=0.1,\
-#     dataset_type='val',dataset_total=0.1)
-# dataset_test = CloudMaskSequenceDataset(directory, num_input=2, num_output=2,train_ratio=0.8, valid_ratio=0.1, test_ratio=0.1,\
-#     dataset_type='test',dataset_total=0.1)
-
-# # # Print dataset sizes
-
-# print(f"Dataset size: {len(dataset_train)}")
-# print(len(dataset_train.valid_data_after2),"len(dataset.valid_data)") 
-# print(len(dataset_train),"len(dataset)")
-
-#     print((dataset_train[0][0].shape),"(dataset)")
-#     #print((dataset_train.valid_data_after2[-2:]),"len(dataset.valid_data)") 
-    
-#     print(f"Dataset size: {len(dataset_val)}")
-#     print(len(dataset_val.valid_data_after2),"len(dataset.valid_data)") 
-#     print(len(dataset_val),"len(dataset)")
-#     #print((dataset_val.valid_data_after2[-2:]),"len(dataset.valid_data)") 
-    
-#     print(f"Dataset size: {len(dataset_test)}")
-#     print(len(dataset_test.valid_data_after2),"len(dataset.valid_data)") 
-#     print(len(dataset_test),"len(dataset)")
-    #print((dataset_test.valid_data_after2[-2:]),"len(dataset.valid_data)") 
-# Dataset size: 81646 num_input = 2
-# Dataset size: 33638 num_input = 24 to 24  exited with code=0 in 30.365 seconds
-# Dataset size: 20395 num_input = 32 to 32  exited with code=0 in 39.675 seconds
-# Dataset size: 8981  num_input = 40 to 40  exited with code=0 in 48.618 seconds
